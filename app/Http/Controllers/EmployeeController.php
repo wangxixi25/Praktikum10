@@ -2,37 +2,37 @@
 
 namespace App\Http\Controllers;
 
+
+use App\Models\Position;
+use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
-use App\Models\Employee;
-use App\Models\Position;
-
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 class EmployeeController extends Controller
 {
-
-    public function home()
-    {
-        $pageTitle = 'Home Page';
-        return view('home', compact('pageTitle'));
-    }
-
-    // index Eloquent
+    /**
+     * Display a listing of the resource.
+     */
     public function index()
     {
         $pageTitle = 'Employee List';
+        // Query Builder
+       // ELOQUENT
+    $employees = Employee::all();
 
-        // ELOQUENT
-        $employees = Employee::all();
+    return view('employee.index', [
+        'pageTitle' => $pageTitle,
+        'employees' => $employees
+    ]);
 
-        return view('employee.index', [
-            'pageTitle' => $pageTitle,
-            'employees' => $employees
-        ]);
     }
 
-    // Create Eloquent
+    /**
+     * Show the form for creating a new resource.
+     */
     public function create()
     {
         $pageTitle = 'Create Employee';
@@ -43,42 +43,58 @@ class EmployeeController extends Controller
         return view('employee.create', compact('pageTitle', 'positions'));
     }
 
-    // Store Eloquent
     public function store(Request $request)
-    {
-        $messages = [
-            'prCode.required' => 'Kode Barang harus diisi.',
-            'prName.required' => 'Nama Barang harus diisi.',
-            'prPay.required' => 'Harga Barang harus diisi.',
-            'prPay.numeric' => 'Isi Harga Barang dengan angka.',
-            'prDesc.required' => 'Deskripsi Barang harus diisi.',
-            'prUnit.required' => 'Unit Barang harus diisi.',
-        ];
+{
+    $messages = [
+        'required' => ':Attribute harus diisi.',
+        'email' => 'Isi :attribute dengan format yang benar',
+        'numeric' => 'Isi :attribute dengan angka'
+    ];
 
-        $validator = Validator::make($request->all(), [
-            'firstName' => 'required',
-            'lastName' => 'required',
-            'email' => 'required|email',
-            'age' => 'required|numeric',
-        ], $messages);
+    $validator = Validator::make($request->all(), [
+        'firstName' => 'required',
+        'lastName' => 'required',
+        'email' => 'required|email',
+        'age' => 'required|numeric',
+    ], $messages);
 
-        if ($validator->fails()) {
-            return redirect()->back()->withErrors($validator)->withInput();
-        }
-
-        // ELOQUENT
-        $employee = New Employee;
-        $employee->firstname = $request->firstName;
-        $employee->lastname = $request->lastName;
-        $employee->email = $request->email;
-        $employee->age = $request->age;
-        $employee->position_id = $request->position;
-        $employee->save();
-
-        return redirect()->route('employees.index');
+    if ($validator->fails()) {
+        return redirect()->back()->withErrors($validator)->withInput();
     }
 
-    // Show Eloquent
+    // Get File
+    $file = $request->file('cv');
+
+    if ($file != null) {
+        $originalFilename = $file->getClientOriginalName();
+        $encryptedFilename = $file->hashName();
+
+        // Store File
+        $file->store('public/files');
+    }
+
+    // ELOQUENT
+    $employee = New Employee;
+    $employee->firstname = $request->firstName;
+    $employee->lastname = $request->lastName;
+    $employee->email = $request->email;
+    $employee->age = $request->age;
+    $employee->position_id = $request->position;
+
+    if ($file != null) {
+        $employee->original_filename = $originalFilename;
+        $employee->encrypted_filename = $encryptedFilename;
+    }
+
+    $employee->save();
+
+    return redirect()->route('employees.index');
+}
+
+    /**
+     * Display the specified resource.
+     */
+
     public function show(string $id)
     {
         $pageTitle = 'Employee Detail';
@@ -89,269 +105,106 @@ class EmployeeController extends Controller
         return view('employee.show', compact('pageTitle', 'employee'));
     }
 
-    // Edit
+
+    /**
+     * Show the form for editing the specified resource.
+     */
     public function edit(string $id)
-    {
-        $pageTitle = 'Edit Employee';
+{
+    $pageTitle = 'Edit Employee';
 
-        // ELOQUENT
-        $positions = Position::all();
-        $employee = Employee::find($id);
+    // ELOQUENT
+    $positions = Position::all();
+    $employee = Employee::find($id);
 
-        return view('employee.edit', compact('pageTitle', 'positions', 'employee'));
+    return view('employee.edit', compact('pageTitle', 'positions', 'employee'));
+}
+
+public function update(Request $request, $id)
+{
+    $messages = [
+        'required' => ':Attribute harus diisi.',
+        'email' => 'Isi :attribute dengan format yang benar',
+        'numeric' => 'Isi :attribute dengan angka'
+    ];
+
+    $validator = Validator::make($request->all(), [
+        'firstName' => 'required',
+        'lastName' => 'required',
+        'email' => 'required|email',
+        'age' => 'required|numeric',
+    ], $messages);
+
+    if ($validator->fails()) {
+        return redirect()->back()->withErrors($validator)->withInput();
     }
 
-    // Update
+    // Get the employee
+    $employee = Employee::find($id);
 
-    public function update(Request $request, string $id)
-    {
-        $messages = [
-            'required' => ':Attribute harus diisi.',
-            'email' => 'Isi :attribute dengan format yang benar',
-            'numeric' => 'Isi :attribute dengan angka'
-        ];
+    // Update the employee data
+    $employee->firstname = $request->input('firstName');
+    $employee->lastname = $request->input('lastName');
+    $employee->email = $request->input('email');
+    $employee->age = $request->input('age');
+    $employee->position_id = $request->input('position');
 
-        $validator = Validator::make($request->all(), [
-            'firstName' => 'required',
-            'lastName' => 'required',
-            'email' => 'required|email',
-            'age' => 'required|numeric',
-        ], $messages);
+    // Check if a new CV file is uploaded
+    if ($request->hasFile('cv')) {
+        $file = $request->file('cv');
 
-        if ($validator->fails()) {
-            return redirect()->back()->withErrors($validator)->withInput();
+        // Delete the previous CV file if it exists
+        if ($employee->encrypted_filename) {
+            Storage::delete('public/files/' . $employee->encrypted_filename);
+            $employee->original_filename = null;
+            $employee->encrypted_filename = null;
         }
 
-        // ELOQUENT
-        $employee = Employee::find($id);
-        $employee->firstname = $request->firstName;
-        $employee->lastname = $request->lastName;
-        $employee->email = $request->email;
-        $employee->age = $request->age;
-        $employee->position_id = $request->position;
-        $employee->save();
+        // Store the new CV file
+        $originalFilename = $file->getClientOriginalName();
+        $encryptedFilename = $file->hashName();
+        $file->store('public/files');
 
-        return redirect()->route('employees.index');
+        // Update the employee's CV details
+        $employee->original_filename = $originalFilename;
+        $employee->encrypted_filename = $encryptedFilename;
     }
 
-    // DELET
-    public function destroy(string $id)
-    {
-        // ELOQUENT
-        Employee::find($id)->delete();
+    // Check if the CV should be removed
+    if ($request->input('remove_cv') == '1') {
+        // Delete the CV file if it exists
+        if ($employee->encrypted_filename) {
+            Storage::delete('public/files/' . $employee->encrypted_filename);
+        }
 
-        return redirect()->route('employees.index');
+        // Clear the CV details
+        $employee->original_filename = null;
+        $employee->encrypted_filename = null;
     }
 
+    // Save the updated employee data
+    $employee->save();
 
-    // RAW SQL
-
-    // public function index()
-    // {
-    //     $pageTitle = 'Employee List';
-
-    //     // RAW SQL QUERY
-    //     $employees = DB::select('
-    //         select *, employees.id as employee_id, positions.name as position_name
-    //         from employees
-    //         left join positions on employees.position_id = positions.id
-    //     ');
-
-    //     return view('employee.index', [
-    //         'pageTitle' => $pageTitle,
-    //         'employees' => $employees
-    //     ]);
-    // }
-
-    // Query
-    // public function index()
-    // {
-    //     $pageTitle = 'Employee List';
-
-    //     $employees = DB::table('employees')
-    //         ->select('employees.*', 'positions.name as position_name')
-    //         ->leftJoin('positions', 'employees.position_id', '=', 'positions.id')
-    //         ->get();
-
-    //     return view('employee.index', compact('pageTitle', 'employees'));
-    // }
-
-    // RAW
-    // public function create()
-    // {
-    //     $pageTitle = 'Create Employee';
-    //     // RAW SQL Query
-    //     $positions = DB::select('select * from positions');
-
-    //     return view('employee.create', compact('pageTitle', 'positions'));
-    // }
-
-    // // Query
-    // public function create()
-    // {
-    //     $pageTitle = 'Create Employee';
-
-    //     $positions = DB::table('positions')->get();
-
-    //     return view('employee.create', compact('pageTitle', 'positions'));
-    // }
-
-
-    //  public function store(Request $request)
-    //  {
-    //      $messages = [
-    //          'required' => ':Attribute harus diisi.',
-    //          'email' => 'Isi :attribute dengan format yang benar',
-    //          'numeric' => 'Isi :attribute dengan angka'
-    //      ];
-
-    //      $validator = Validator::make($request->all(), [
-    //          'firstName' => 'required',
-    //          'lastName' => 'required',
-    //          'email' => 'required|email',
-    //          'age' => 'required|numeric',
-    //      ], $messages);
-
-    //      if ($validator->fails()) {
-    //          return redirect()->back()->withErrors($validator)->withInput();
-    //      }
-
-    //      // INSERT QUERY
-    //      DB::table('employees')->insert([
-    //          'firstname' => $request->firstName,
-    //          'lastname' => $request->lastName,
-    //          'email' => $request->email,
-    //          'age' => $request->age,
-    //          'position_id' => $request->position,
-    //      ]);
-
-    //      return redirect()->route('employees.index');
-    //  }
-
-
-    // RAW
-    // public function show(string $id)
-    // {
-    //     $pageTitle = 'Employee Detail';
-
-    //     // RAW SQL QUERY
-    //     $employee = collect(DB::select('
-    //     select employees.*, positions.name as position_name, employees.first_name as firstName, employees.last_name as lastName, employees.email
-    //     from employees
-    //     left join positions on employees.position_id = positions.id
-    //     where employees.id = ?
-    // ', [$id]))->first();
-
-    //     return view('employee.show', compact('pageTitle', 'employee'));
-    // }
-
-
-    // // Query
-    // public function show(string $id)
-    // {
-    //     $pageTitle = 'Employee Detail';
-
-    //     $employee = DB::table('employees')
-    //         ->select('employees.*', 'positions.name as position_name', 'employees.first_name as firstName', 'employees.last_name as lastName', 'employees.email')
-    //         ->leftJoin('positions', 'employees.position_id', '=', 'positions.id')
-    //         ->where('employees.id', '=', $id)
-    //         ->first();
-
-    //     return view('employee.show', compact('pageTitle', 'employee'));
-    // }
-
-
-    // RAW
-    // public function edit(string $id)
-    // {
-    //     $pageTitle = 'Edit Employee';
-
-    //     // RAW SQL QUERY
-    //     $employee = collect(DB::select("
-    //     SELECT employees.*,
-    //         positions.name AS position_name,
-    //         employees.firstname AS firstName,
-    //         employees.lastname AS lastName,
-    //         employees.email,
-    //         employees.id AS employee_id
-    //         FROM employees
-    //         LEFT JOIN positions ON employees.position_id = positions.id
-    //         WHERE employees.id = ?
-    //     ", [$id]))->first();
-
-    //         // RAW SQL QUERY
-    //         $positions = DB::select('select * from positions');
-
-    //         return view('employee.edit', compact('pageTitle', 'employee', 'positions'));
-    // }
-
-    //Query
-    // public function edit(string $id)
-    // {
-    //     $pageTitle = 'Edit Employee';
-
-    //     $employee = DB::table('employees')
-    //         ->select('employees.*', 'positions.name as position_name', 'employees.firstname as firstName', 'employees.lastname as lastName', 'employees.email', 'employees.id as employee_id')
-    //         ->leftJoin('positions', 'employees.position_id', '=', 'positions.id')
-    //         ->where('employees.id', '=', $id)
-    //         ->first();
-
-    //     $positions = DB::table('positions')
-    //         ->select('*')
-    //         ->get();
-
-    //     return view('employee.edit', compact('pageTitle', 'employee', 'positions'));
-    // }
-
-
-    // /**
-    //  * Update the specified resource in storage.
-    //  */
-    // public function update(Request $request, string $id)
-    // {
-    //     $messages = [
-    //         'required' => ':Attribute harus diisi.',
-    //         'email' => 'Isi :attribute dengan format yang benar',
-    //         'numeric' => 'Isi :attribute dengan angka'
-    //     ];
-
-    //     $validator = Validator::make($request->all(), [
-    //         'firstName' => 'required',
-    //         'lastName' => 'required',
-    //         'email' => 'required|email',
-    //         'age' => 'required|numeric',
-    //     ], $messages);
-
-    //     if ($validator->fails()) {
-    //         return redirect()->back()->withErrors($validator)->withInput();
-    //     }
-
-    //     // Update data
-    //     DB::table('employees')
-    //         ->where('id', $id)
-    //         ->update([
-    //             'firstname' => $request->firstName,
-    //             'lastname' => $request->lastName,
-    //             'email' => $request->email,
-    //             'age' => $request->age,
-    //         ]);
-
-    //     return redirect()->route('employees.index');
-    // }
-
+    return redirect()->route('employees.index');
+}
     /**
      * Remove the specified resource from storage.
      */
+    public function destroy(string $id)
+{
+    // ELOQUENT
+    Employee::find($id)->delete();
 
-    // public function destroy(string $id)
-    // {
-    //     // QUERY BUILDER
-    //     DB::table('employees')
-    //         ->where('id', $id)
-    //         ->delete();
+    return redirect()->route('employees.index');
+}
+public function downloadFile($employeeId)
+{
+    $employee = Employee::find($employeeId);
+    $encryptedFilename = 'public/files/'.$employee->encrypted_filename;
+    $downloadFilename = Str::lower($employee->firstname.'_'.$employee->lastname.'_cv.pdf');
 
-    //     return redirect()->route('employees.index');
-    // }
-
-
+    if(Storage::exists($encryptedFilename)) {
+        return Storage::download($encryptedFilename, $downloadFilename);
+    }
+}
 }
